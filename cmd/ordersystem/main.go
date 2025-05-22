@@ -2,7 +2,9 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"github.com/golang-migrate/migrate/v4/database/mysql"
 	"net"
 	"net/http"
 
@@ -21,6 +23,10 @@ import (
 
 	// mysql
 	_ "github.com/go-sql-driver/mysql"
+
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/mysql"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
 func main() {
@@ -34,6 +40,18 @@ func main() {
 		panic(err)
 	}
 	defer db.Close()
+
+	driver, err := mysql.WithInstance(db, &mysql.Config{})
+	if err != nil {
+		panic(err)
+	}
+	m, err := migrate.NewWithDatabaseInstance("file://sql/migrations", "mysql", driver)
+	if err != nil {
+		panic(err)
+	}
+	if err = m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		panic(err)
+	}
 
 	rabbitMQChannel := getRabbitMQChannel()
 
@@ -75,7 +93,7 @@ func main() {
 }
 
 func getRabbitMQChannel() *amqp.Channel {
-	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/")
 	if err != nil {
 		panic(err)
 	}
